@@ -1,0 +1,230 @@
+# import libraries
+
+import numpy as np
+from scipy.integrate import odeint
+import matplotlib.pyplot as plt
+
+# defining constants
+
+# LuxR & XylS
+k_LuxR = 121.7 # v strong expression (nM/min)
+k_XylS = 121.7 # v strong expression (nM/min)
+degrad_LuxR = 0.002 
+degrad_XylS = 0.002 # assumptions to be similar to XylS
+kcon_cI_LuxR = 1.05 #1.46 # described 'v weak' - 1%
+kcon_cI_XylS = 2.25 #3.31 # 44 induction ratio
+
+
+# max induced production 
+b_hrpR = 10 # min-1
+b_hrpS = 150 # can adjust -> alter RBS if needed!!
+b_TetR = 230 #stong rate
+b_YFP = 115
+
+
+# basal production
+a_hrpR = 0.1 #  weak - 1%
+a_hrpS = 2.25  # 44 inductin ratio
+a_TetR = 2.3 #  weak - 1%
+a_YFP = 1.15 #  weak - 1%
+
+# hill constant
+Kd_R = 206 
+Kd_S = 3135
+Kd_TetR = 8.75
+Kd_AHL = 10
+Kd_Bz = 10
+
+# hill coefficient
+n_R = 2
+n_S = 2
+n_TetR = 2
+
+# degradation rates - from value of quorum sensing paper & adapted 
+degrad_LuxR = 0.002
+degrad_XylS = 0.002
+degrad_hrpR = 0.05
+degrad_hrpS = 0.05
+degrad_TetR = 0.14 # with LVA
+degrad_YFP = 0.1 # with LVA
+
+
+# Define the system of ODEs
+def model4(y, t, AHL, Bz):
+    R, S, TetR, YFP = y
+    
+    dhrpR_dt = a_hrpR + b_hrpR*((AHL/Kd_AHL)/(1+(AHL/Kd_AHL)))-degrad_hrpR*R # association & dissociation??
+    
+    dhrpS_dt = a_hrpS + b_hrpS*((Bz/Kd_Bz)/(1+(Bz/Kd_Bz)))-degrad_hrpS*S # association & dissociation??
+    
+    dTetR_dt = a_TetR + b_TetR*(( ((R/Kd_R)**n_R) / ((1+R/Kd_R)**n_R) ) *  ( ((S/Kd_S)**n_S) / ((1+S/Kd_S)**n_S) )) - degrad_TetR*TetR
+
+    dYFP_dt = (a_YFP + (b_YFP / (1 + (TetR / Kd_TetR)**n_TetR)) - (degrad_YFP * YFP))
+    
+    return [dhrpR_dt, dhrpS_dt, dTetR_dt, dYFP_dt]
+
+
+# Simulation Plots
+# combo AHL & Bz simulation
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import odeint
+
+
+# Initial conditions
+hrpR = 0
+hrpS = 0
+TetR = 0
+YFP = 0
+initial_conditions = [hrpR, hrpS, TetR, YFP]
+
+# Simulation parameters
+t1 = np.linspace(0, 100, 500)  # Steady-state phase (no AHL/Bz)
+t2 = np.linspace(100, 200, 500)  # AHL pulse phase
+t = np.concatenate((t1, t2))  # Combine the time points
+
+# AHL pulse concentrations
+pulse_conditions = [(50,50), (0,50), (50,0), (0,0)]
+
+# Colors for YFP during pulse phase
+colors = ['green', 'blue', 'red', 'purple']
+
+# Plotting YFP
+plt.figure(figsize=(7, 6))
+
+
+# Phase 1
+solution1 = odeint(model4, initial_conditions, t1, args=(0, 0))
+hrpR1, hrpS1, TetR1, YFP1 = solution1.T
+
+
+# Phase 2: Introduce AHL pulses
+for i, (AHL,Bz) in enumerate(pulse_conditions):
+    solution2 = odeint(model4, [hrpR1[-1], hrpS1[-1],TetR1[-1], YFP1[-1]], t2, args=(AHL, Bz))
+    hrpR2, hrpS2, TetR2, YFP2 = solution2.T
+
+    # Combine YFP results
+    YFP = np.concatenate((YFP1, YFP2))
+    plt.plot(t, YFP, color=colors[i], label=f'AHL = {AHL} nM, Bz = {Bz} nM')
+
+# Formatting the YFP plot
+plt.title('YFP Response to AHL Pulses', fontsize=16)
+plt.xlabel('Time (minutes)', fontsize=14)
+plt.ylabel('YFP Concentration (nM)', fontsize=14)
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.xlim(0, 200)
+plt.show()
+
+# Plotting TetR
+plt.figure(figsize=(7, 6))  # Adjusted figure size for narrower plot
+
+# Plot TetR after AHL pulses
+for i, (AHL,Bz) in enumerate(pulse_conditions):
+    solution2 = odeint(model4, [hrpR1[-1], hrpS1[-1],TetR1[-1], YFP1[-1]], t2, args=(AHL, Bz))
+    hrpR2, hrpS2, TetR2, YFP2 = solution2.T
+
+    # Combine YFP results
+    TetR = np.concatenate((TetR1, TetR2))
+    plt.plot(t, TetR, color=colors[i], label=f'AHL = {AHL} nM, Bz = {Bz} nM')
+
+    
+# Formatting the TetR plot
+plt.title('TetR Response to AHL Pulses', fontsize=16)
+plt.xlabel('Time (minutes)', fontsize=14)
+plt.ylabel('TetR Concentration (nM)', fontsize=14)
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.xlim(0, 200)
+plt.show()
+
+
+# Plotting hrpR & hrpS
+plt.figure(figsize=(7, 6))  #
+
+# Plot  after AHL pulses
+for i, (AHL,Bz) in enumerate(pulse_conditions):
+    solution2 = odeint(model4, [hrpR1[-1], hrpS1[-1],TetR1[-1], YFP1[-1]], t2, args=(AHL, Bz))
+    hrpR2, hrpS2, TetR2, YFP2 = solution2.T
+
+    # Combine  results
+    hrpR = np.concatenate((hrpR1, hrpR2))
+    plt.plot(t, hrpR, color=colors[i], label=f'AHL = {AHL} nM, Bz = {Bz} nM')
+
+# Formatting the  plot
+plt.title('hrpR Response to AHL Pulses', fontsize=16)
+plt.xlabel('Time (minutes)', fontsize=14)
+plt.ylabel('hrpR Concentration (nM)', fontsize=14)
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.xlim(0, 200)
+plt.show()
+
+
+plt.figure(figsize=(7, 6))  
+
+
+for i, (AHL,Bz) in enumerate(pulse_conditions):
+    solution2 = odeint(model4, [hrpR1[-1], hrpS1[-1],TetR1[-1], YFP1[-1]], t2, args=(AHL, Bz))
+    hrpR2, hrpS2, TetR2, YFP2 = solution2.T
+
+    # Combine  results
+    hrpS = np.concatenate((hrpS1, hrpS2))
+    plt.plot(t, hrpS, color=colors[i], label=f'AHL = {AHL} nM, Bz = {Bz} nM')
+
+# Formatting the  plot
+plt.title('hrpS Response to AHL Pulses', fontsize=16)
+plt.xlabel('Time (minutes)', fontsize=14)
+plt.ylabel('hrpS Concentration (nM)', fontsize=14)
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.xlim(0, 200)
+plt.show()
+
+
+
+# dose response curve
+
+hrpR = 0
+hrpS = 0
+TetR = 0
+YFP = 0
+initial_conditions = [hrpR, hrpS, TetR, YFP]
+
+
+# Simulation parameters
+t = np.linspace(0, 1500, 3000)  # Long enough to reach steady state
+
+# Range of  concentrations (logarithmic scale)
+AHL_concentrations = np.logspace(-1, 2, 50)  # From 0.001 nM to 100 nM
+pulse_concentrations = [(AHL, AHL) for AHL in AHL_concentrations]
+
+# Store steady-state YFP values
+YFP_steady_state = []
+
+# Simulate the system for each concentration
+for i, (AHL,Bz) in enumerate(pulse_concentrations):
+    solution1 = odeint(model4, initial_conditions, t, args=(Bz, AHL))
+    hrpS, hrpR, TetR1, YFP1 = solution1.T
+    YFP_steady_state.append(YFP1[-1])  # Take the final YFP value as steady state
+
+
+# Plot the dose-response curve
+plt.figure(figsize=(8, 6))
+plt.semilogx(AHL_concentrations, YFP_steady_state, marker='o', color='green', label='YFP', markersize=5)
+
+plt.title('Dose-Response Curve of YFP vs AHL Concentration', fontsize=16)
+plt.xlabel('Inducer Concentration (nM)', fontsize=14)
+plt.ylabel('Steady-State YFP (nM)', fontsize=14)
+
+plt.xlim(1e-1, 1e2)  # Limits for the x-axis 
+
+plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+plt.legend(fontsize=12)
+plt.tight_layout()
+plt.show()
